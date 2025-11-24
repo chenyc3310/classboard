@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公會任務佈告欄 (Drive版)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* --- 樣式設定 (RPG 風格) --- */
+        :root { --bg: #202020; --board: #8b4513; --paper: #f4e4bc; --accent: #e74c3c; }
+        body {
+            background: var(--bg); font-family: 'Press Start 2P', cursive; color: white;
+            display: flex; flex-direction: column; align-items: center; padding: 20px;
+        }
+        h1 { text-shadow: 3px 3px 0 #000; font-size: 20px; text-align: center; margin-bottom: 30px; }
+        
+        /* 輸入區 */
+        .panel {
+            background: #333; border: 4px solid #fff; padding: 20px; width: 90%; max-width: 500px;
+            box-shadow: 6px 6px 0 #000; margin-bottom: 30px;
+        }
+        input, button {
+            width: 100%; padding: 10px; margin-bottom: 10px; background: #000; border: 2px solid #0f0;
+            color: #0f0; font-family: inherit; box-sizing: border-box; font-size: 12px;
+        }
+        button {
+            background: var(--accent); color: #fff; border: 4px solid #fff; cursor: pointer;
+            box-shadow: 3px 3px 0 #000; margin-top: 10px;
+        }
+        button:active { transform: translate(3px, 3px); box-shadow: none; }
+        button:disabled { background: #555; cursor: wait; }
+
+        /* 佈告欄 */
+        #board {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; max-width: 1000px;
+            background: var(--board); padding: 20px; border: 8px solid #5a3010; min-height: 300px;
+            box-shadow: inset 0 0 20px #000;
+        }
+        .paper {
+            background: var(--paper); color: #2c1810; width: 220px; padding: 15px;
+            box-shadow: 4px 4px 8px rgba(0,0,0,0.6); position: relative; font-family: sans-serif;
+            transform: rotate(var(--rot)); transition: transform 0.2s; word-break: break-all;
+        }
+        .paper:hover { transform: scale(1.1) rotate(0deg); z-index: 10; border: 2px solid white; }
+        .pin { width: 10px; height: 10px; background: #c0392b; border-radius: 50%; position: absolute; top: 5px; left: 50%; transform: translateX(-50%); }
+        .content { font-weight: bold; margin-top: 15px; white-space: pre-wrap; }
+        img.preview { max-width: 100%; border: 2px solid #5a3010; margin-top: 10px; display: block; }
+        .link-btn { display: inline-block; background: #5a3010; color: #fff; text-decoration: none; padding: 3px 8px; margin-top: 8px; font-size: 12px; border-radius: 4px; }
+        .loading { font-size: 10px; color: yellow; text-align: center; display: none; margin-top: 5px;}
+    </style>
+</head>
+<body>
+
+    <h1>🛡️ 公會任務佈告欄 🛡️</h1>
+
+    <div class="panel">
+        <div>任務內容 (文字):</div>
+        <input type="text" id="msg" placeholder="輸入文字...">
+        
+        <div>上傳捲軸 (圖片/檔案):</div>
+        <input type="file" id="file">
+        
+        <div>傳送門 (網址):</div>
+        <input type="text" id="link" placeholder="https://...">
+
+        <button onclick="submitData()" id="btn">發佈公告</button>
+        <div class="loading" id="status">傳送資料中...史萊姆搬運較慢請稍候...</div>
+    </div>
+
+    <div id="board">
+        <div style="color:white; margin-top: 50px;">讀取公會紀錄中...</div>
+    </div>
+
+    <script>
+        // ▼▼▼ 請將下方引號內的網址換成你的 Web App URL ▼▼▼
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwTLs7XT7ZoC49RUD0tqz7VcfKOrylNiohD7oLoZwnb0c3rRysA29GiDCBbnwAT8joZDw/exec";
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+        const board = document.getElementById('board');
+        const statusDiv = document.getElementById('status');
+        const btn = document.getElementById('btn');
+
+        // 1. 初始化：讀取資料
+        window.onload = function() {
+            fetch(SCRIPT_URL)
+            .then(res => res.json())
+            .then(data => {
+                board.innerHTML = ''; // 清空讀取訊息
+                if(data.length === 0) board.innerHTML = '<div style="color:white">目前無任務...</div>';
+                data.forEach(item => createPost(item));
+            })
+            .catch(err => {
+                console.error(err);
+                board.innerHTML = '<div style="color:red">無法連結公會總部 (請檢查網址設定)</div>';
+            });
+        };
+
+        // 2. 發送資料
+        function submitData() {
+            const msg = document.getElementById('msg').value;
+            const link = document.getElementById('link').value;
+            const fileInput = document.getElementById('file');
+            const file = fileInput.files[0];
+
+            if (!msg && !file && !link) return alert("請輸入內容！");
+
+            // UI 鎖定
+            btn.disabled = true;
+            statusDiv.style.display = 'block';
+
+            // 準備資料
+            const payload = {
+                msg: msg,
+                link: link,
+                fileName: file ? file.name : "",
+                fileMimeType: file ? file.type : "",
+                fileData: "" // 待會填入
+            };
+
+            // 如果有檔案，轉成 Base64 再傳
+            if (file) {
+                // 限制檔案大小 (Google Script 限制約 5MB，安全起見設 3MB)
+                if(file.size > 3 * 1024 * 1024) {
+                    alert("檔案太大囉！請小於 3MB");
+                    resetUI();
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    payload.fileData = e.target.result; // Base64 字串
+                    sendToGoogle(payload);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                sendToGoogle(payload);
+            }
+        }
+
+        function sendToGoogle(payload) {
+            // 使用 text/plain 避免 CORS 預檢請求 (Google Script 特性)
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(response => {
+                if(response.status === 'success') {
+                    // 成功後直接在畫面上新增一筆，不用重整
+                    createPost({
+                        msg: payload.msg,
+                        link: payload.link,
+                        fileUrl: response.fileUrl,
+                        fileType: (payload.fileMimeType || "").startsWith('image') ? 'image' : (payload.fileData ? 'file' : 'text')
+                    }, true);
+                    
+                    // 清空表單
+                    document.getElementById('msg').value = "";
+                    document.getElementById('link').value = "";
+                    document.getElementById('file').value = "";
+                } else {
+                    alert("上傳失敗：" + response.message);
+                }
+                resetUI();
+            })
+            .catch(err => {
+                console.error(err);
+                alert("傳送失敗，請檢查網路");
+                resetUI();
+            });
+        }
+
+        function resetUI() {
+            btn.disabled = false;
+            statusDiv.style.display = 'none';
+        }
+
+        function createPost(data, isNew = false) {
+            const div = document.createElement('div');
+            div.className = 'paper';
+            div.style.setProperty('--rot', (Math.random()*6 - 3) + 'deg');
+
+            let html = `<div class="pin"></div>`;
+            if(data.msg) html += `<div class="content">${escapeHtml(data.msg)}</div>`;
+            
+            if(data.fileType === 'image' && data.fileUrl) {
+                html += `<img src="${data.fileUrl}" class="preview">`;
+            } else if (data.fileType === 'file' && data.fileUrl) {
+                html += `<a href="${data.fileUrl}" target="_blank" class="link-btn">📄 下載檔案</a>`;
+            }
+
+            if(data.link) {
+                html += `<br><a href="${data.link}" target="_blank" class="link-btn">🔗 連結</a>`;
+            }
+
+            div.innerHTML = html;
+            
+            if(isNew) {
+                board.insertBefore(div, board.firstChild);
+            } else {
+                board.appendChild(div);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return text;
+            return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
