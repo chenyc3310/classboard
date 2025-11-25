@@ -180,39 +180,42 @@
             statusDiv.innerText = "⏳ 正在飛鴿傳書給公會總部...";
         }
 
+        // 這是防彈版的建立貼文功能
         function createPost(data) {
-            const div = document.createElement('div');
-            div.className = 'paper';
-            div.style.setProperty('--rot', (Math.random()*6 - 3) + 'deg');
+            // ★ 這行是防護罩的開始：嘗試執行
+            try {
+                const div = document.createElement('div');
+                div.className = 'paper';
+                div.style.setProperty('--rot', (Math.random()*6 - 3) + 'deg');
 
-            let html = `<div class="pin"></div>`;
-            
-            // 垃圾桶直接顯示
-            if (data.uid) {
-                html += `<button class="del-btn" onclick="requestDelete('${data.uid}')" title="刪除任務">🗑️</button>`;
+                let html = `<div class="pin"></div>`;
+                
+                if (data.uid) {
+                    html += `<button class="del-btn" onclick="requestDelete('${data.uid}')" title="刪除任務">🗑️</button>`;
+                }
+
+                // 這裡我們加上了 String(...) 確保一定是文字，這就是昨天當機的解藥
+                if(data.msg) html += `<div class="content">${escapeHtml(String(data.msg))}</div>`;
+                
+                if(data.fileType === 'image' && data.fileUrl) {
+                    html += `<img src="${data.fileUrl}" class="preview">`;
+                } else if (data.fileType === 'file' && data.fileUrl) {
+                    html += `<a href="${data.fileUrl}" target="_blank" class="link-btn">📄 下載檔案</a>`;
+                }
+
+                if(data.link) {
+                    html += `<br><a href="${data.link}" target="_blank" class="link-btn">🔗 連結</a>`;
+                }
+
+                div.innerHTML = html;
+                board.appendChild(div);
+
+            } catch (error) {
+                // ★ 這行是防護罩的結尾：如果上面出錯，電腦會來到這裡
+                // 我們告訴電腦：不要當機，只要在後台偷偷紀錄錯誤就好，然後繼續做下一件事
+                console.error("發現一則有問題的貼文，已自動跳過，錯誤原因：", error);
             }
-
-            if(data.msg) html += `<div class="content">${escapeHtml(data.msg)}</div>`;
-            
-            if(data.fileType === 'image' && data.fileUrl) {
-                html += `<img src="${data.fileUrl}" class="preview">`;
-            } else if (data.fileType === 'file' && data.fileUrl) {
-                html += `<a href="${data.fileUrl}" target="_blank" class="link-btn">📄 下載檔案</a>`;
-            }
-
-            if(data.link) {
-                html += `<br><a href="${data.link}" target="_blank" class="link-btn">🔗 連結</a>`;
-            }
-
-            div.innerHTML = html;
-            board.appendChild(div);
         }
-
-        function escapeHtml(text) {
-    if (!text) return text;
-    // 強制把任何東西 (包含數字) 都變成文字，再做處理
-    return String(text).replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
     </script>
 </body>
 </html>
