@@ -209,9 +209,10 @@
         }
 
         function escapeHtml(text) {
-            if (!text) return text;
-            return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
+    if (!text) return text;
+    // 強制把任何東西 (包含數字) 都變成文字，再做處理
+    return String(text).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
     </script>
 </body>
 </html>
